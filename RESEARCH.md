@@ -433,7 +433,7 @@ This document outlines the key functionality requirements for Zest and evaluates
 | Functionality           | Recommended Package      | Alternative             |
 | ----------------------- | ------------------------ | ----------------------- |
 | Authentication          | Auth.js (NextAuth.js)    | Clerk                   |
-| Real-time Communication | Pusher                   | Socket.io (self-hosted) |
+| Real-time Communication | Socket.io (self-hosted)  | Pusher                  |
 | Database ORM            | Prisma                   | Drizzle ORM             |
 | UI Components           | Shadcn UI                | Headless UI             |
 | Form Validation         | React Hook Form + Zod    | Formik + Yup            |
@@ -442,4 +442,36 @@ This document outlines the key functionality requirements for Zest and evaluates
 | ID Generation           | nanoid                   | uuid                    |
 | Testing                 | Vitest + Testing Library | Jest + Playwright       |
 | State Management        | Zustand                  | Context + useReducer    |
+
+## 11. Hosting
+
+**Problem:** Deploy the application in a cost-effective manner while maintaining reliability.
+
+### Options:
+
+#### Frontend (Next.js)
+
+- **Vercel**: Free tier with limitations, best integration with Next.js
+- **Netlify**: Free tier with similar limitations
+- **GitHub Pages**: Free but requires additional configuration for Next.js
+
+**Recommendation:** Vercel for simplicity with Next.js.
+
+#### WebSocket Server
+
+- **Render**: Free tier with 512MB RAM, sleeps after inactivity
+- **Railway**: Free tier includes 1 shared CPU, 512MB RAM, limits uptime
+- **Fly.io**: Free allowance includes small VMs
+- **Heroku**: Limited free tier with sleep policies
+
+**Recommendation:** Render for WebSocket server hosting due to its ease of setup and suitable free tier.
+
+#### Database
+
+- **Supabase**: Generous free tier with PostgreSQL
+- **Railway**: PostgreSQL hosting with free tier
+- **Neon**: Serverless PostgreSQL with free tier
+- **PlanetScale**: MySQL-compatible serverless database
+
+**Recommendation:** Supabase or Railway PostgreSQL for free tier database hosting.
 
