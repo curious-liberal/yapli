@@ -7,6 +7,28 @@ const dev = process.env.NODE_ENV !== "production";
 const hostname = "localhost";
 const port = 3000;
 
+// Parse allowed origins from environment variable
+const getAllowedOrigins = () => {
+  // In development, always allow localhost
+  if (dev) {
+    return [
+      "http://localhost:3000",
+      "http://127.0.0.1:3000",
+    ];
+  }
+  
+  // In production, use environment variable
+  if (process.env.ALLOWED_ORIGINS) {
+    return process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim());
+  }
+  
+  // No origins configured in production - will reject all CORS requests
+  console.warn('WARNING: No ALLOWED_ORIGINS configured in production. All cross-origin requests will be rejected.');
+  return [];
+};
+
+const allowedOrigins = getAllowedOrigins();
+
 const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
 
@@ -24,8 +46,24 @@ app.prepare().then(() => {
 
   const io = new SocketIOServer(httpServer, {
     cors: {
-      origin: dev ? ["http://localhost:3000"] : false,
+      origin: (origin, callback) => {
+        // Allow requests with no origin (like Postman or server-to-server)
+        if (!origin) return callback(null, true);
+        
+        // In production with no configured origins, reject all
+        if (!dev && allowedOrigins.length === 0) {
+          return callback(new Error('CORS not configured'), false);
+        }
+        
+        if (allowedOrigins.indexOf(origin) !== -1) {
+          callback(null, true);
+        } else {
+          console.warn(`CORS blocked request from: ${origin}`);
+          callback(new Error('Not allowed by CORS'), false);
+        }
+      },
       methods: ["GET", "POST"],
+      credentials: true,
     },
   });
 
