@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CORS Tester</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        input, button {
+            padding: 10px;
+            margin: 5px;
+            font-size: 16px;
+        }
+        input[type="text"] {
+            width: 400px;
+        }
+        #results {
+            background: #f0f0f0;
+            padding: 15px;
+            border-radius: 5px;
+            white-space: pre-wrap;
+            min-height: 200px;
+        }
+        .controls {
+            margin-bottom: 20px;
+        }
+        .error { color: red; }
+        .success { color: green; }
+    </style>
+</head>
+<body>
+    <h1>CORS Test Tool</h1>
+    
+    <div class="controls">
+        <h3>API Endpoint Test</h3>
+        <input type="text" id="apiUrl" placeholder="http://localhost:3000/api/rooms" value="http://localhost:3000/api/rooms">
+        <select id="method">
+            <option value="GET">GET</option>
+            <option value="POST">POST</option>
+            <option value="PUT">PUT</option>
+            <option value="DELETE">DELETE</option>
+        </select>
+        <button onclick="testAPI()">Test API</button>
+    </div>
+
+    <div class="controls">
+        <h3>Socket.IO Test</h3>
+        <input type="text" id="socketUrl" placeholder="http://localhost:3000" value="http://localhost:3000">
+        <button onclick="testSocketIO()">Test Socket.IO</button>
+        <button onclick="disconnectSocket()" id="disconnectBtn" style="display:none;">Disconnect</button>
+    </div>
+
+    <div class="controls">
+        <h3>Custom Headers</h3>
+        <input type="text" id="customHeaders" placeholder='{"Authorization": "Bearer token"}' style="width: 400px;">
+    </div>
+
+    <h2>Results:</h2>
+    <button onclick="clearResults()">Clear</button>
+    <pre id="results"></pre>
+
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script>
+        const resultsEl = document.getElementById('results');
+        let socket = null;
+        
+        function log(message, type = '') {
+            const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
+            const prefix = type ? `<span class="${type}">[${type.toUpperCase()}]</span> ` : '';
+            resultsEl.innerHTML += `[${timestamp}] ${prefix}${message}\n`;
+            resultsEl.scrollTop = resultsEl.scrollHeight;
+        }
+
+        function clearResults() {
+            resultsEl.innerHTML = '';
+        }
+
+        async function testAPI() {
+            const url = document.getElementById('apiUrl').value;
+            const method = document.getElementById('method').value;
+            const customHeadersStr = document.getElementById('customHeaders').value;
+            
+            if (!url) {
+                log('Please enter a URL', 'error');
+                return;
+            }
+
+            log(`Testing ${method} request to: ${url}`);
+            
+            try {
+                let headers = {
+                    'Content-Type': 'application/json'
+                };
+                
+                if (customHeadersStr) {
+                    try {
+                        const customHeaders = JSON.parse(customHeadersStr);
+                        headers = { ...headers, ...customHeaders };
+                        log('Using custom headers: ' + JSON.stringify(customHeaders));
+                    } catch (e) {
+                        log('Invalid JSON in custom headers', 'error');
+                        return;
+                    }
+                }
+
+                const options = {
+                    method: method,
+                    credentials: 'include',
+                    headers: headers
+                };
+
+                if (method !== 'GET') {
+                    options.body = JSON.stringify({ test: true });
+                }
+
+                const response = await fetch(url, options);
+                
+                log(`Response Status: ${response.status} ${response.statusText}`, response.ok ? 'success' : 'error');
+                log(`Response Headers:`);
+                for (let [key, value] of response.headers) {
+                    log(`  ${key}: ${value}`);
+                }
+                
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    const data = await response.json();
+                    log('Response Body: ' + JSON.stringify(data, null, 2));
+                } else {
+                    const text = await response.text();
+                    log('Response Body: ' + text);
+                }
+                
+                if (response.ok) {
+                    log('✅ CORS request successful!', 'success');
+                }
+            } catch (error) {
+                log(`❌ CORS Error: ${error.message}`, 'error');
+                log('Details: This typically means CORS is blocking the request');
+                log('Check browser console for more details');
+            }
+        }
+
+        function testSocketIO() {
+            const url = document.getElementById('socketUrl').value;
+            
+            if (!url) {
+                log('Please enter a Socket.IO URL', 'error');
+                return;
+            }
+
+            if (socket && socket.connected) {
+                log('Socket already connected. Disconnect first.', 'error');
+                return;
+            }
+
+            log(`Attempting Socket.IO connection to: ${url}`);
+            
+            socket = io(url, {
+                withCredentials: true,
+                transports: ['websocket', 'polling']
+            });
+
+            socket.on('connect', () => {
+                log(`✅ Socket.IO connected! ID: ${socket.id}`, 'success');
+                document.getElementById('disconnectBtn').style.display = 'inline';
+                
+                // Test sending a message
+                socket.emit('test-message', { test: true });
+                log('Sent test message to server');
+            });
+
+            socket.on('connect_error', (error) => {
+                log(`❌ Socket.IO Error: ${error.message}`, 'error');
+                if (error.type === 'TransportError') {
+                    log('This is likely a CORS issue', 'error');
+                }
+            });
+
+            socket.on('disconnect', (reason) => {
+                log(`Socket disconnected: ${reason}`);
+                document.getElementById('disconnectBtn').style.display = 'none';
+            });
+
+            // Listen for any events
+            socket.onAny((eventName, ...args) => {
+                log(`Received event '${eventName}': ${JSON.stringify(args)}`);
+            });
+        }
+
+        function disconnectSocket() {
+            if (socket && socket.connected) {
+                socket.disconnect();
+                log('Manually disconnected socket');
+            }
+        }
+
+        // Test on different port to ensure cross-origin
+        log('CORS Test Tool Ready', 'success');
+        log('Open this file using: python3 -m http.server 8080');
+        log('Then navigate to: http://localhost:8080/test-cors.html');
+        log('This ensures requests are cross-origin\n');
+    </script>
+</body>
+</html>
