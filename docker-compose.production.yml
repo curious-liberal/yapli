@@ -1,0 +1,116 @@
+services:
+  traefik:
+    image: traefik:v3.0
+    container_name: traefik
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - proxy
+      - yapli_network
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - CF_API_EMAIL=${CF_API_EMAIL}
+      - CF_API_KEY=${CF_API_KEY}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./docker-data/traefik/traefik.yml:/traefik.yml:ro
+      - ./docker-data/traefik/acme.json:/acme.json
+      - ./docker-data/traefik/logs:/logs
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      # HTTP to HTTPS redirect
+      - "traefik.http.middlewares.https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.https-redirect.redirectscheme.permanent=true"
+      # Global rate limit
+      - "traefik.http.middlewares.rate-limit.ratelimit.average=100"
+      - "traefik.http.middlewares.rate-limit.ratelimit.burst=50"
+      # Security headers
+      - "traefik.http.middlewares.security-headers.headers.frameDeny=true"
+      - "traefik.http.middlewares.security-headers.headers.sslRedirect=true"
+      - "traefik.http.middlewares.security-headers.headers.browserXssFilter=true"
+      - "traefik.http.middlewares.security-headers.headers.contentTypeNosniff=true"
+      - "traefik.http.middlewares.security-headers.headers.stsIncludeSubdomains=true"
+      - "traefik.http.middlewares.security-headers.headers.stsPreload=true"
+      - "traefik.http.middlewares.security-headers.headers.stsSeconds=31536000"
+      - "traefik.http.middlewares.security-headers.headers.customResponseHeaders.X-Robots-Tag=noindex,nofollow"
+
+  zest_postgres:
+    image: postgres:17-alpine
+    container_name: yapli_postgres
+    restart: unless-stopped
+    networks:
+      - yapli_network
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - ./docker-data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  zest_app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: yapli_app
+    restart: unless-stopped
+    networks:
+      - proxy
+      - yapli_network
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@zest_postgres:5432/${DB_NAME}
+      - NEXTAUTH_URL=${NEXTAUTH_URL}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
+      # OAuth (optional)
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GITHUB_ID=${GITHUB_ID}
+      - GITHUB_SECRET=${GITHUB_SECRET}
+    depends_on:
+      zest_postgres:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      
+      # HTTP router (redirect to HTTPS)
+      - "traefik.http.routers.yapli.entrypoints=http"
+      - "traefik.http.routers.yapli.rule=Host(`${DOMAIN}`) || Host(`www.${DOMAIN}`)"
+      - "traefik.http.routers.yapli.middlewares=https-redirect"
+      
+      # HTTPS router
+      - "traefik.http.routers.yapli-secure.entrypoints=https"
+      - "traefik.http.routers.yapli-secure.rule=Host(`${DOMAIN}`) || Host(`www.${DOMAIN}`)"
+      - "traefik.http.routers.yapli-secure.tls=true"
+      - "traefik.http.routers.yapli-secure.tls.certresolver=cloudflare"
+      - "traefik.http.routers.yapli-secure.tls.domains[0].main=${DOMAIN}"
+      - "traefik.http.routers.yapli-secure.tls.domains[0].sans=*.${DOMAIN}"
+      
+      # Apply middlewares
+      - "traefik.http.routers.yapli-secure.middlewares=security-headers,rate-limit,yapli-auth-limit@docker"
+      
+      # Specific auth endpoint rate limiting
+      - "traefik.http.middlewares.yapli-auth-limit.ratelimit.average=10"
+      - "traefik.http.middlewares.yapli-auth-limit.ratelimit.period=1m"
+      - "traefik.http.middlewares.yapli-auth-limit.ratelimit.burst=5"
+      - "traefik.http.middlewares.yapli-auth-limit.ratelimit.sourcecriterion.requestheadername=CF-Connecting-IP"
+      
+      # Service definition
+      - "traefik.http.services.yapli.loadbalancer.server.port=3000"
+
+networks:
+  proxy:
+    external: true
+  yapli_network:
+    driver: bridge
