@@ -9,6 +9,33 @@
 
 Yapli is a modern, full-featured web-based chatroom application built with Next.js 15 and real-time WebSocket communication. Create dynamic chat rooms with authentication, join conversations with custom aliases, share links with rich previews, and enjoy a seamless chat experience in a beautiful theme-aware interface.
 
+## 🚀 Getting Started
+
+### Quick Start (Local Development)
+
+```bash
+# Clone the repository
+git clone https://github.com/your-username/yapli.git
+cd yapli
+
+# Install dependencies
+npm install
+
+# Start local database and run migrations
+./start-local.sh
+
+# Start development server
+npm run dev
+```
+
+Visit http://localhost:3000
+
+For detailed setup instructions, see [Local Development Guide](docs/LOCAL_DEVELOPMENT.md).
+
+### Production Deployment
+
+For production deployment with full security features, see [Deployment Security Guide](docs/DEPLOYMENT_SECURITY.md).
+
 ## 👷‍♀️ Contributing
 
 If you would like to contribute, please read [CONTRIBUTING.md](docs/CONTRIBUTING.md)
@@ -74,3 +101,7 @@ If you would like to contribute, please read [CONTRIBUTING.md](docs/CONTRIBUTING
 
 - [Changelog](docs/CHANGELOG.md) - Project changelog and release notes
 - [Standards & Guidelines](docs/CLAUDE.md) - Development standards and project guidelines
+- [Local Development](docs/LOCAL_DEVELOPMENT.md) - Local development setup guide
+- [Security Assessment](docs/SECURITY.md) - Security audit and recommendations
+- [Security Tickets](docs/TICKETS.md) - Security remediation tickets and roadmap
+- [Deployment Security](docs/DEPLOYMENT_SECURITY.md) - Production deployment with security layers
